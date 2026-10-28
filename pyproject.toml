@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adcheck"
+version = "1.0.0"
+description = "Read-only Active Directory attack-path audit orchestrator (checks only)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "ldap3",
+    "requests",
+]
+
+[project.scripts]
+adcheck = "adcheck.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["adcheck*"]

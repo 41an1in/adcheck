@@ -24,12 +24,44 @@ Checks that need credentials are skipped automatically when none are supplied; c
 
 ## Installation (Kali)
 
+adcheck is pip-installable; one `adcheck setup` then installs **all** backend tools for you:
+
+```bash
+sudo apt install pipx && pipx ensurepath
+pipx install /home/automation/Development/adcheck   # or: pipx install git+<url>
+adcheck setup            # installs certipy-ad, netexec, bloodhound-ce, pre2k, sccmhunter, rpcclient
+adcheck setup --check    # verify
+```
+
+`pipx install` brings in the Python dependencies (`ldap3`, `requests`) automatically. `adcheck setup` handles the rest:
+
+- **netexec, certipy-ad, bloodhound-ce, pre2k** — via `pipx install`; if a pipx build fails, setup automatically falls back to the Kali apt package when one exists (`netexec`, `certipy-ad`, `bloodhound-ce.py`)
+- **rpcclient** — via `sudo apt install smbclient samba-common-bin` (both are installed: rpcclient moved from samba-common-bin to the smbclient package in samba 4.24+ / Debian trixie / current Kali)
+- **sccmhunter** (not pip-packaged) — cloned into `~/.local/share/adcheck/sccmhunter` (git itself is apt-installed if missing), its dependencies installed into a dedicated venv `~/.local/share/adcheck/venv`, and exposed through a wrapper script `~/.local/share/adcheck/bin/sccmhunter` that is registered in the adcheck config file
+
+Every install step is verified afterwards: if the tool still does not resolve, the step is marked FAIL with a diagnostic (for apt steps, what the package actually shipped per `dpkg -L`), and a "Failed steps" recap is printed before the final status table.
+
+Troubleshooting: `pipx install netexec` fails under Python 3.14 when Rust/cargo are absent (a dependency, aardwolf, must be compiled) — on Kali, setup auto-falls-back to `apt install netexec`. To get the newest upstream via pipx instead: `sudo apt install rustc cargo`, then re-run `adcheck setup`.
+
+Setup flags: `--check` prints the tool status table and installs nothing; `--no-apt` skips every apt step; `-y/--yes` skips the `Proceed? [y/N]` confirmation prompt. Setup is idempotent: anything that already resolves is reported as already present and skipped.
+
+Tools are resolved at startup in this order:
+
+1. `$PATH` (`nxc`/`netexec`, `certipy-ad`/`certipy`, `bloodhound-ce-python`/`bloodhound-python`, `pre2k`, `sccmhunter`, `rpcclient`)
+2. the config file `~/.config/adcheck/config.json` — format `{"tools": {"<tool>": "/path"}}`; override the location with the `ADCHECK_CONFIG` env var
+3. the explicit `--sccmhunter PATH` / `--pre2k PATH` flags, which win over everything
+
+From a source clone the dev launcher `./adcheck.sh` (equivalently `python3 -m adcheck`) still works; `./adcheck.sh setup` runs the same setup without installing the package.
+
+<details>
+<summary>Manual install (without <code>adcheck setup</code>)</summary>
+
 ```bash
 # Python dependencies (ldap3, requests)
 pip install -r requirements.txt
 
-# netexec, bloodhound-ce-python, rpcclient
-sudo apt install netexec bloodhound-ce.py samba-common-bin
+# netexec, bloodhound-ce-python, rpcclient (rpcclient is in smbclient on samba 4.24+)
+sudo apt install netexec bloodhound-ce.py smbclient samba-common-bin
 
 # certipy-ad
 pipx install certipy-ad
@@ -42,7 +74,7 @@ git clone https://github.com/garrettfoster13/sccmhunter
 cd sccmhunter && pip install -r requirements.txt && cd ..
 ```
 
-Tools are resolved from `$PATH` at startup (`nxc`/`netexec`, `certipy-ad`/`certipy`, `bloodhound-ce-python`/`bloodhound-python`, `pre2k`, `sccmhunter`, `rpcclient`). Point at non-standard locations with `--sccmhunter /path/sccmhunter.py` and `--pre2k /path/pre2k`.
+</details>
 
 ## Usage
 
@@ -55,6 +87,8 @@ Tools are resolved from `$PATH` at startup (`nxc`/`netexec`, `certipy-ad`/`certi
 ```bash
 python3 -m adcheck -d corp.local --dc-ip 10.0.0.10 -u lowpriv -p 'Passw0rd' --targets 10.0.0.0/24 -o results/
 ```
+
+When the package is installed (see Installation), the `adcheck` console command accepts the exact same arguments in place of `./adcheck.sh`.
 
 Options: `-d/--domain`, `--dc-ip`, `--dc-fqdn`, `-u/--username`, `-p/--password`, `-H/--hashes` (`LM:NT` or `:NT`), `-k/--kerberos`, `--targets` (IP, CIDR, or file with one target per line — defaults to `--dc-ip`), `-o/--output`, `--checks`, `--skip`, `--timeout` (per-tool seconds, default 300), `--sccmhunter PATH`, `--pre2k PATH`, `--no-color`, `--list`.
 

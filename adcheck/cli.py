@@ -1,4 +1,5 @@
 import argparse
+import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -8,7 +9,11 @@ from .core import SEVERITIES, Context, Finding, ToolNotFound, cprint, resolve_to
 from .report import write_reports
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "setup":
+        from .setup import run_setup
+        return run_setup(argv[1:])
     parser = argparse.ArgumentParser(
         prog="adcheck",
         description="Active Directory security audit orchestrator (read-only checks)",
@@ -29,7 +34,7 @@ def main() -> int:
     parser.add_argument("--pre2k", default=None, metavar="PATH", help="explicit path to pre2k")
     parser.add_argument("--no-color", dest="no_color", action="store_true")
     parser.add_argument("--list", dest="list_checks", action="store_true", help="list discovered checks and exit")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     checks = discover_checks()
     if args.list_checks:

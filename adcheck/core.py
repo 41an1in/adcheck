@@ -1,3 +1,5 @@
+import json
+import os
 import shlex
 import shutil
 import ssl
@@ -64,6 +66,21 @@ class Context:
         return self.password is not None
 
 
+def config_path() -> Path:
+    override = os.environ.get("ADCHECK_CONFIG")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".config" / "adcheck" / "config.json"
+
+
+def load_config() -> dict:
+    try:
+        data = json.loads(config_path().read_text())
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def resolve_tools(ctx, sccmhunter_path=None, pre2k_path=None) -> None:
     ctx.tools["nxc"] = shutil.which("nxc") or shutil.which("netexec")
     ctx.tools["certipy"] = shutil.which("certipy-ad") or shutil.which("certipy")
@@ -71,6 +88,13 @@ def resolve_tools(ctx, sccmhunter_path=None, pre2k_path=None) -> None:
     ctx.tools["pre2k"] = pre2k_path or shutil.which("pre2k")
     ctx.tools["sccmhunter"] = sccmhunter_path or shutil.which("sccmhunter") or shutil.which("sccmhunter.py")
     ctx.tools["rpcclient"] = shutil.which("rpcclient")
+    cfg_tools = load_config().get("tools")
+    if isinstance(cfg_tools, dict):
+        for key in ctx.tools:
+            if ctx.tools[key] is None:
+                path = cfg_tools.get(key)
+                if isinstance(path, str) and path:
+                    ctx.tools[key] = path
 
 
 def run_tool(ctx, tool_key, argv: list[str], timeout=None, cwd=None) -> subprocess.CompletedProcess:
